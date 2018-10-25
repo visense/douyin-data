@@ -288,6 +288,7 @@ function(require, exports, module) {
     e > stickyT ? stickyEl.addClass("tab-box-fixed") : stickyEl.removeClass("tab-box-fixed")
   },
   exports.init = function(e) {
+    console.log(_bytedAcrawler)
     dytk = e.dytk,
     params.user_id = e.uid,
     nonce = e.uid,
