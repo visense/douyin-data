@@ -1,1 +1,0 @@
-__M.define("douyin_falcon:component/loading/index",function(n,o,e){"";e.exports={show:function(){$("#pagelet-loading").show()},hide:function(){$("#pagelet-loading").hide()}}});

@@ -130,8 +130,16 @@ class SignUtil(object):
         '''
         url = f"{_API}/douyin/device/new/version/{self.version}" if self.version else "{_API}/douyin/device/new"
         resp = await self.s.get(url)
-        logging.debug(f"get response from {url} is {resp} with body: {trim(resp.text)}")
-        return resp.json().get('data', {})
+        # 被防火墙阻止检查
+        if (resp.status_code == 200):
+          logging.debug(f"get response from {url} is {resp} with body: {trim(resp.text)}")
+          return resp.json().get('data', {})
+        else:
+          logging.error('Get device request denied')
+          logging.info("After five minutes rest, try again.")
+          # 5分钟后重试
+          await trio.sleep(300)
+          return self.get_device()
 
     async def get_sign(self, token, query):
         '''使用拼装参数签名
@@ -147,6 +155,7 @@ class SignUtil(object):
         assert isinstance(query, dict)
         url = f"{_API}/sign"
         resp = await self.s.post(url, json={"token": token, "query": params2str(query)})
+        # print(resp)
         logging.debug(f"post response from {url} is {resp} with body: {trim(resp.text)}")
         return resp.json().get('data', {}), resp.json()
 
@@ -182,16 +191,18 @@ class SignUtil(object):
             logging.error(f"curl {url} with method={method} failed, return None!")
             return None
         try:
-            s_params = await self.get_signed_params(params)
-            if method.upper() == 'GET':
-                resp = await self.s.get(url, params=s_params, data=data, headers=IPHONE_HEADER, verify=False, timeout=timeout)
-            elif method.upper() == 'POST':
-                resp = await self.s.post(url, params=s_params, data=data, headers=IPHONE_HEADER, verify=False, timeout=timeout)
-            else:
-                logging.error(f"undefined method={method} for url={url}")
-                return None
-            logging.debug(f"curl response from {url} is {resp} with body: {trim(resp.text)}")
-            return resp
+          # print(params)
+          s_params = await self.get_signed_params(params)
+          # print(s_params)
+          if method.upper() == 'GET':
+            resp = await self.s.get(url, params=s_params, data=data, headers=IPHONE_HEADER, verify=False, timeout=timeout)
+          elif method.upper() == 'POST':
+            resp = await self.s.post(url, params=s_params, data=data, headers=IPHONE_HEADER, verify=False, timeout=timeout)
+          else:
+            logging.error(f"undefined method={method} for url={url}")
+            return None
+          logging.debug(f"curl response from {url} is {resp} with body: {trim(resp.text)}")
+          return resp
         except Exception as e:
             logging.warning(f"curl {url} with method={method} failed, retry with new signed params!")
             await self.get_sign_params(True) # force fresh self.sign
@@ -201,39 +212,40 @@ class SignUtil(object):
 
 # 异步下载/保存器
 class AsyncDownloader(object):
-    def __init__(self, save_dir):
-        super(AsyncDownloader, self).__init__()
-        self.save_dir = save_dir
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-        
-    async def download_file(self, url, headers=IPHONE_HEADER, timeout=DOWNLOAD_TIMEOUT, res_time=RETRIES_TIMES):
-        if res_time <= 0: # 重试超过了次数
-            return None
-        try:
-            _url = random.choice(url) if isinstance(url, list) else url
-            res = await asks.get(_url, headers=headers, timeout=timeout, retries=3)
-        except (socket.gaierror, trio.BrokenResourceError, trio.TooSlowError, asks.errors.RequestTimeout) as e:
-            logging.error("download from %s fail]err=%s!" % (url, e))
-            await trio.sleep(random.randint(1, 5)) # for scheduler
-            return await self.download_file(url, res_time=res_time-1)
+  def __init__(self, save_dir):
+    super().__init__()
+    self.save_dir = save_dir
+    # 目录不存在处理
+    if not os.path.exists(save_dir):
+      os.makedirs(save_dir)
+      
+  async def download_file(self, url, headers=IPHONE_HEADER, timeout=DOWNLOAD_TIMEOUT, res_time=RETRIES_TIMES):
+    if res_time <= 0: # 重试超过了次数
+        return None
+    try:
+        _url = random.choice(url) if isinstance(url, list) else url
+        res = await asks.get(_url, headers=headers, timeout=timeout, retries=3)
+    except (socket.gaierror, trio.BrokenResourceError, trio.TooSlowError, asks.errors.RequestTimeout) as e:
+        logging.error("download from %s fail]err=%s!" % (url, e))
+        await trio.sleep(random.randint(1, 5)) # for scheduler
+        return await self.download_file(url, res_time=res_time-1)
 
-        if res.status_code not in [200, 202]:
-            logging.warn(f"download from {url} fail]response={res}")
-            await trio.sleep(random.randint(3, 10))
-            return await self.download_file(url, res_time=res_time-1)
-        return res.content
+    if res.status_code not in [200, 202]:
+        logging.warn(f"download from {url} fail]response={res}")
+        await trio.sleep(random.randint(3, 10))
+        return await self.download_file(url, res_time=res_time-1)
+    return res.content
 
-    def is_file_downloaded(self, name):
-        file_path = os.path.join(self.save_dir, fname_normalize(name))
-        return os.path.exists(file_path)
+  def is_file_downloaded(self, name):
+    file_path = os.path.join(self.save_dir, fname_normalize(name))
+    return os.path.exists(file_path)
 
-    # 异步文件保存
-    async def save_file(self, name, content):
-        file_path = os.path.join(self.save_dir, fname_normalize(name))
-        fd = await trio.open_file(file_path, 'wb')
-        await fd.write(content)
-        await fd.aclose()
+  # 异步文件保存
+  async def save_file(self, name, content):
+    file_path = os.path.join(self.save_dir, fname_normalize(name))
+    fd = await trio.open_file(file_path, 'wb')
+    await fd.write(content)
+    await fd.aclose()
 
 
 

@@ -1,1 +1,0 @@
-__M.define("douyin_falcon:component/banner/index",function(o,n,d){"";function t(o){$("#download").on("click",function(n){n.preventDefault(),o.teaLogger&&o.teaLogger.send("tap",{type:"download_bottom"}),e.downloadApp(o.dl,o.opts)})}var e=o("douyin_falcon:common/download_sdk/download_sdk");d.exports={init:function(o){t(o)}}});

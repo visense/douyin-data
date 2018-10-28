@@ -116,21 +116,23 @@ class DouyinTool(object):
         20
         '''
         url = 'https://aweme.snssdk.com/aweme/v1/user/following/list/'
+        # print(str(offset))
         follow_para = {
-            "user_id": user_id,
-            "offset": str(offset),
-            "count": str(20),
-            "source_type": "2",
-            "max_time": str(int(time.time())),
-            "ac": "WIFI",
+          "user_id": user_id,
+          "offset": str(offset),
+          "count": str(49),
+          "source_type": "2",
+          "max_time": str(int(time.time())),
+          "ac": "WIFI"
         }
         resp = await self.sign_util.curl(url, follow_para)
+        # print(resp.json())
         if not resp:
-            return [], False, offset
+          return [], False, offset
 
         follow_info = resp.json()
+        # print(follow_info)
         follow_list = follow_info.get('followings', [])
-        # hasmore = follow_info.get('has_more', False) # always be true
         hasmore = follow_info.get('total', 0) > (offset + 20)
 
         return follow_list, hasmore, offset + 20
@@ -139,23 +141,18 @@ class DouyinTool(object):
         '''爬取指定用户的所有关注的用户列表 async for video in get_follow_list(uid): ...
         第二次post返回都是失败， post 缺少什么必要参数呢？'''
         total = 0
-        while True:
-            follow_list, hasmore, offset = await self._get_follow_list(user_id, offset)
-            # print(len(follow_list), hasmore, offset)
-            for follow in follow_list:
-                uid = follow.get('uid', None)
-                nickname = follow.get('nickname', '')
-                signature = follow.get('signature', '')
-                birthday = follow.get('birthday', '')
-                # if uid == '92654947278' or nickname == '已重置':
-                #     # 测试发现这个号并没有什么卵用，而且并不是关注的用户
-                #     continue
-                total += 1
-                yield {'user_id':uid, 'nickname':nickname, 'signature':signature, 'birthday':birthday,}
-            if not hasmore:
-                logging.info(f"get follow list finished, there are total {total} people followed by user_id={user_id}!")
-                # raise StopIteration # ref: https://www.jsonthon.org/dev/peps/pep-0479/  or  https://stackoverflow.com/questions/51700960/runtimeerror-generator-raised-stopiteration-everytime-i-try-to-run-app
-                return
+        follow_list, hasmore, offset = await self._get_follow_list(user_id, offset)
+        # print(len(follow_list), hasmore, offset)
+        for follow in follow_list:
+          uid = follow.get('uid', None)
+          nickname = follow.get('nickname', '')
+          signature = follow.get('signature', '')
+          birthday = follow.get('birthday', '')
+          # if uid == '92654947278' or nickname == '已重置':
+          #     # 测试发现这个号并没有什么卵用，而且并不是关注的用户
+          #     continue
+          total += 1
+          yield {'user_id':uid, 'nickname':nickname, 'signature':signature, 'birthday':birthday,}
 
     async def _get_video_list(self, url, user_id, max_cursor=0):
         '''获取视频列表
@@ -176,28 +173,31 @@ class DouyinTool(object):
             "max_cursor": str(max_cursor),
         }
         resp = await self.sign_util.curl(url, video_params)
+        
         if not resp:
-            return [], True, max_cursor
+          return [], True, max_cursor
 
         video_resp = resp.json()
+        # print(video_resp)
         video_list = video_resp.get('aweme_list', [])
         hasmore = video_resp.get('has_more', False)
         max_cursor = video_resp.get('max_cursor', max_cursor)
-
         return video_list, hasmore, max_cursor
 
     async def get_favorite_list(self, user_id, max_cursor=0, repeat_func=None):
-        '''爬取指定用户的所有喜欢视频列表，返回各个视频要下载需要的所有信息，请使用 async for video in get_favorite_list(uid): ...'''
-        total = 0
-        while True:
-            video_list, hasmore, max_cursor = await self._get_video_list("https://aweme.snssdk.com/aweme/v1/aweme/favorite/", user_id, max_cursor)
-            for video in video_list:
-                video_item = await self.parse_video_info(video, repeat_func)
-                total += 1
-                yield video_item
-            if not hasmore:
-                logging.info(f"get favorite list finished, there are total {total} videos for user_id={user_id}!")
-                return
+      '''爬取指定用户的所有喜欢视频列表，返回各个视频要下载需要的所有信息，请使用 async for video in get_favorite_list(uid): ...'''
+      total = 0
+      print('start get favorite list!')
+      while True:
+        video_list, hasmore, max_cursor = await self._get_video_list("https://aweme.snssdk.com/aweme/v1/aweme/favorite/", user_id, max_cursor)
+        for video in video_list:
+          video_item = await self.parse_video_info(video, repeat_func)
+          total += 1
+          yield video_item
+        if not hasmore:
+            logging.info(f"get favorite list finished, there are total {total} videos for user_id={user_id}!")
+            return
+
 
     async def get_post_list(self, user_id, max_cursor=0, repeat_func=None):
         '''爬取指定用户的所有发布视频列表，返回各个视频要下载需要的所有信息，请使用 async for video in get_post_list(uid): ...'''
