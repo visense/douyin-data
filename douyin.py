@@ -122,7 +122,7 @@ class DouyinTool(object):
           "offset": str(offset),
           "count": str(49),
           "source_type": "2",
-          "max_time": str(int(time.time())),
+          "max_time": str(int(time.time()) + 3600),
           "ac": "WIFI"
         }
         resp = await self.sign_util.curl(url, follow_para)

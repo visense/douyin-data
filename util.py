@@ -85,7 +85,7 @@ class SignUtil(object):
     def __init__(self, version=APPINFO['version_code']):
         super(SignUtil, self).__init__()
         self.version = version
-        self.sign = {"expired": arrow.Arrow(2000, 1, 1, 0, 0, 0), "common_params": None, "token":None}
+        self.sign = {"expired": 0, "common_params": None, "token":None}
         self.s = asks.Session(_API, connections=5)
         
     async def get_token(self):
@@ -139,7 +139,10 @@ class SignUtil(object):
           logging.info("After five minutes rest, try again.")
           # 5分钟后重试
           await trio.sleep(300)
-          return self.get_device()
+          url = f"{_API}/douyin/device/new/version/{self.version}" if self.version else "{_API}/douyin/device/new"
+          resp = await self.s.get(url)
+          logging.debug(f"get response from {url} is {resp} with body: {trim(resp.text)}")
+          return resp.json().get('data', {})
 
     async def get_sign(self, token, query):
         '''使用拼装参数签名
@@ -162,18 +165,22 @@ class SignUtil(object):
     async def get_sign_params(self, force=False):
         '''获取可用的签名参数，由于每次获取后的有效时间是大概60分钟，
         因此此处维护一个带时间戳的字典，如果超过 55min 则重新生成，否则就不重新生成，除非强制刷新'''
-        if not force and self.sign['expired'] > arrow.utcnow():
+        t = time.time()
+        # return
+        # print(self.sign['expired'])
+        # print(int(t))
+        if not force and self.sign['expired'] > int(t):
+            print('cache!')
+            await trio.sleep(1)
             return self.sign['common_params'], self.sign['token']
-
         device = await self.get_device()
         common_params = {** device, ** APPINFO}
         token = await self.get_token()
         logging.debug(f"new sign params generated, last time is {self.sign['expired']}")
-
         self.sign = {
-            "expired" : arrow.utcnow().shift(minutes=5), # 实测貌似很快就失效了
-            "common_params" : common_params,
-            "token" : token
+          "expired" : int(t) + 1000, # 实测貌似很快就失效了
+          "common_params" : common_params,
+          "token" : token
         }
         return self.sign['common_params'], self.sign['token']
 
