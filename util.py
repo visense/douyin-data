@@ -158,7 +158,7 @@ class SignUtil(object):
         assert isinstance(query, dict)
         url = f"{_API}/sign"
         resp = await self.s.post(url, json={"token": token, "query": params2str(query)})
-        # print(resp)
+        # print(json.dumps({"token": token, "query": params2str(query)}))
         logging.debug(f"post response from {url} is {resp} with body: {trim(resp.text)}")
         return resp.json().get('data', {}), resp.json()
 
@@ -170,13 +170,13 @@ class SignUtil(object):
         # print(self.sign['expired'])
         # print(int(t))
         if not force and self.sign['expired'] > int(t):
-            print('cache!')
+            logging.info("use cache")
             await trio.sleep(1)
             return self.sign['common_params'], self.sign['token']
         device = await self.get_device()
         common_params = {** device, ** APPINFO}
         token = await self.get_token()
-        logging.debug(f"new sign params generated, last time is {self.sign['expired']}")
+        logging.info(f"new sign params generated, last time is {self.sign['expired']}")
         self.sign = {
           "expired" : int(t) + 1000, # 实测貌似很快就失效了
           "common_params" : common_params,
@@ -190,6 +190,7 @@ class SignUtil(object):
         common_params, token = await self.get_sign_params(force)
         query_params = {**params, ** common_params}
         signed, _ = await self.get_sign(token, query_params)
+        logging.info(f"get signed success!")
         return {**query_params, **signed}
 
     async def curl(self, url, params, data=None, headers=IPHONE_HEADER, method='GET', retries=2, timeout=CURL_TIMEOUT):
